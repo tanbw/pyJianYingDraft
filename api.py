@@ -14,8 +14,7 @@ async def process_video(
     new_draft_name: str,
     new_video_file: UploadFile,
     new_srt_file: UploadFile,
-    title: str,
-    export_path: Optional[str] = None
+    title: str
 ):
     # 创建临时目录存储文件
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -40,32 +39,18 @@ async def process_video(
         if draft_folder.has_draft(new_draft_name):
             draft_folder.remove(new_draft_name)
         
-        # 复制模板草稿（这里假设有一个名为"草稿标题"的模板）
-        try:
-            script = draft_folder.duplicate_as_template(template_name, new_draft_name)
-        except Exception as e:
-            # 如果没有模板，创建一个新草稿
-            script = draft_folder.create(new_draft_name)
+
+        script = draft_folder.create_draft(new_draft_name,720,1280)
         
         # 获取或创建主视频轨道
-        try:
-            main_video_track = script.get_imported_track(
-                draft.TrackType.video,
-                name="主视频",
-            )
-        except:
-            script.add_track(draft.TrackType.video, "主视频")
-            main_video_track = script.get_imported_track(
-                draft.TrackType.video,
-                name="主视频",
-            )
+        script.add_track(draft.TrackType.video, "主视频")
         
         # 替换视频素材
         new_video = draft.VideoMaterial(video_path)
-        script.replace_material_by_seg(
-            main_video_track, 0, new_video,
-            handle_shrink=ShrinkMode.cut_tail,
-            handle_extend=ExtendMode.push_tail
+        new_video_segment = draft.VideoSegment(new_video,
+                                 trange(0, new_video.duration))
+        script.add_segment(
+            new_video_segment,"主视频"
         )
 
         # 创建标题文本片段
@@ -73,7 +58,7 @@ async def process_video(
             title, trange(0, new_video.duration),
             background=TextBackground(color='#FFFFFF'),
             font=draft.FontType.鸿朗体,
-            style=draft.TextStyle(color=(0, 0, 0), size=15),
+            style=draft.TextStyle(color=(0, 0, 0), size=10,auto_wrapping=True),
             clip_settings=draft.ClipSettings(transform_y=0.8)
         )
         
@@ -128,12 +113,17 @@ async def process_video(
 
         # 导出视频
         ctrl = draft.JianyingController()
-        if export_path is None:
-            export_path = temp_dir
+        export_path = r"d:\temp\jianying"
         
         # 确保导出目录存在
         os.makedirs(export_path, exist_ok=True)
-        
+        exported_video_path = os.path.join(export_path, f"{new_draft_name}.mp4")
+        if(os.path.isfile(exported_video_path)):
+            os.remove(exported_video_path)
+
+        jianying_export_path=os.path.join(r'C:\Users\Administrator\Videos', f"{new_draft_name}.mp4");
+        if(os.path.isfile(jianying_export_path)):
+            os.remove(jianying_export_path)
         # 导出视频
         ctrl.export_draft(new_draft_name, export_path,
                          resolution=ExportResolution.RES_720P,
@@ -143,10 +133,13 @@ async def process_video(
        # await asyncio.sleep(10)
         
         # 创建zip文件
-        zip_path = os.path.join(temp_dir, f"{new_draft_name}.zip")
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        zip_path = os.path.join(export_path, f"{new_draft_name}.zip")
+        if(os.path.isfile(zip_path)):
+            os.remove(zip_path)
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
             # 添加草稿目录
             draft_dir = os.path.join(draft_folder_path, new_draft_name)
+            print(draft_dir)
             if os.path.exists(draft_dir):
                 for root, dirs, files in os.walk(draft_dir):
                     for file in files:
@@ -156,37 +149,35 @@ async def process_video(
             
             # 添加视频素材
             zipf.write(video_path, os.path.basename(video_path))
-            
+            print(video_path)
             # 添加导出的视频
-            exported_video_path = os.path.join(export_path, f"{new_draft_name}.mp4")
+            
+            print(exported_video_path)
             if os.path.exists(exported_video_path):
                 zipf.write(exported_video_path, os.path.basename(exported_video_path))
         
         return zip_path
 
-@app.post("/create_video/")
+@app.post("/create_video")
 async def create_video(
     template_name: str= Form(...),
     new_draft_name: str = Form(...),
     new_video: UploadFile = File(...),
     new_srt: UploadFile = File(...),
-    title: str = Form(...),
-    export_path: Optional[str] = Form(None)
+    title: str = Form(...)
 ):
-    try:
-        # 处理视频并创建zip文件
-        zip_path = await process_video(
-            template_name,new_draft_name, new_video, new_srt, title, export_path
-        )
-        
-        # 返回zip文件
-        return FileResponse(
-            zip_path,
-            media_type="application/zip",
-            filename=f"{new_draft_name}.zip"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"处理视频时出错: {str(e)}")
+    # 处理视频并创建zip文件
+    zip_path = await process_video(
+        template_name,new_draft_name, new_video, new_srt, title
+    )
+    
+    # 返回zip文件
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{new_draft_name}.zip"
+    )
+
 
 if __name__ == "__main__":
     import uvicorn
