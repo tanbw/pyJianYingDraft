@@ -1,7 +1,7 @@
 
-cd C:\pyJianYingDraft
+cd D:\home\program\pyJianYingDraft
 
-C:\Users\Administrator\jianying\Scripts\python api.py
+jianying\Scripts\python api.py
 
 pause
 

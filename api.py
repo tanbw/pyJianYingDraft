@@ -180,7 +180,7 @@ async def process_video(
         # 导出视频
         ctrl.export_draft(new_draft_name, export_path,
                          resolution=ExportResolution.RES_720P,
-                         framerate=ExportFramerate.FR_30)
+                         framerate=ExportFramerate.FR_24)
         
         # 等待导出完成（可能需要根据实际情况调整等待时间）
        # await asyncio.sleep(10)
